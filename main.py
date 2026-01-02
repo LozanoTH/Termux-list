@@ -6,6 +6,12 @@ def run(p):
     else:
         subprocess.call(["xdg-open", p])
 
+def safe_add(stdscr, y, x, text, attr=0):
+    h, w = stdscr.getmaxyx()
+    if y < 0 or y >= h or x < 0 or x >= w:
+        return
+    stdscr.addnstr(y, x, text, w - x - 1, attr)
+
 def main(stdscr):
     curses.curs_set(0)
     curses.start_color()
@@ -24,40 +30,36 @@ def main(stdscr):
         h, w = stdscr.getmaxyx()
         items = os.listdir(cwd)
 
-        stdscr.attron(curses.color_pair(1))
-        stdscr.addstr(0, 2, " FILE MANAGER ")
-        stdscr.addstr(1, 0, "─" * w)
-        stdscr.attroff(curses.color_pair(1))
+        safe_add(stdscr, 0, 2, " FILE MANAGER ", curses.color_pair(1))
+        safe_add(stdscr, 1, 0, "─" * (w-1), curses.color_pair(1))
 
         for i, it in enumerate(items):
-            icon = "📁" if os.path.isdir(os.path.join(cwd, it)) else "📄"
             y = i + 2
             if y >= h - 2:
                 break
-            if i == idx:
-                stdscr.attron(curses.color_pair(2))
-                stdscr.addstr(y, 2, f"{icon} {it[:w-6]}")
-                stdscr.attroff(curses.color_pair(2))
-            else:
-                color = 3 if icon == "📁" else 4
-                stdscr.attron(curses.color_pair(color))
-                stdscr.addstr(y, 2, f"{icon} {it[:w-6]}")
-                stdscr.attroff(curses.color_pair(color))
 
-        stdscr.attron(curses.color_pair(1))
-        stdscr.addstr(h-2, 0, "─" * w)
-        stdscr.addstr(h-1, 2, f"DIR: {cwd[:w-6]}")
-        stdscr.attroff(curses.color_pair(1))
+            path = os.path.join(cwd, it)
+            icon = "[D]" if os.path.isdir(path) else "[F]"
+            line = f"{icon} {it}"
+
+            if i == idx:
+                safe_add(stdscr, y, 2, line, curses.color_pair(2))
+            else:
+                color = 3 if os.path.isdir(path) else 4
+                safe_add(stdscr, y, 2, line, curses.color_pair(color))
+
+        safe_add(stdscr, h-2, 0, "─" * (w-1), curses.color_pair(1))
+        safe_add(stdscr, h-1, 2, f"DIR: {cwd}", curses.color_pair(1))
 
         k = stdscr.getch()
 
         if k in (ord("q"), ord("Q")):
             break
-        if k == curses.KEY_UP and idx > 0:
+        elif k == curses.KEY_UP and idx > 0:
             idx -= 1
-        if k == curses.KEY_DOWN and idx < len(items) - 1:
+        elif k == curses.KEY_DOWN and idx < len(items) - 1:
             idx += 1
-        if k in (curses.KEY_ENTER, 10, 13):
+        elif k in (10, 13):
             p = os.path.join(cwd, items[idx])
             if os.path.isdir(p):
                 cwd = p
@@ -65,11 +67,13 @@ def main(stdscr):
                 idx = 0
             else:
                 run(p)
-        if k in (curses.KEY_BACKSPACE, 127):
-            cwd = os.path.dirname(cwd)
-            os.chdir(cwd)
-            idx = 0
+        elif k in (curses.KEY_BACKSPACE, 127, 8):
+            parent = os.path.dirname(cwd)
+            if parent:
+                cwd = parent
+                os.chdir(cwd)
+                idx = 0
 
 curses.wrapper(main)
 
-# v2
+# v3
